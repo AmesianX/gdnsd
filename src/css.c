@@ -184,11 +184,11 @@ static void css_conn_cleanup(css_conn_t* c)
 }
 
 F_NONNULL
-static bool respond_blocking_ack(css_conn_t* c)
+static bool respond_blocking(css_conn_t* c, const char key)
 {
     gdnsd_assert(c->css);
     gdnsd_assert(c->state == WAITING_SERVER);
-    c->wbuf.key = RESP_ACK;
+    c->wbuf.key = key;
     csbuf_set_v(&c->wbuf, 0);
     c->wbuf.d = 0;
     c->state = WRITING_RESP;
@@ -636,7 +636,7 @@ static void handle_req_stop(css_conn_t* c, css_t* css)
     // response above was our last interaction with it.  In replace cases,
     // there's one more interaction during the final stats handoff, and the
     // new daemon doesn't wait on our close anyways.
-    if (!respond_blocking_ack(c) && c != css->replace_conn_dmn)
+    if (!respond_blocking(c, RESP_ACK) && c != css->replace_conn_dmn)
         c->fd = -1;
     // If "gdnsdctl replace" is connected and driving the process, finally
     // give it an ACK response to its REQ_REPL, as we're now past the point
@@ -644,7 +644,7 @@ static void handle_req_stop(css_conn_t* c, css_t* css)
     // let it close as the process dies as above.
     if (css->replace_conn_ctl) {
         gdnsd_assert(c == css->replace_conn_dmn);
-        if (!respond_blocking_ack(css->replace_conn_ctl))
+        if (!respond_blocking(css->replace_conn_ctl, RESP_ACK))
             css->replace_conn_ctl->fd = -1;
     }
 }
@@ -729,8 +729,8 @@ static void handle_req_tak2(css_conn_t* c, const css_t* css)
     const pid_t take_pid = (pid_t)c->rbuf.d;
     if (!css->replacement_pid || take_pid != css->replacement_pid || c != css->replace_conn_dmn) {
         log_illegal_takeover('2', (long)take_pid, (long)css->replacement_pid);
-        respond(c, RESP_FAIL, 0, 0, NULL, false);
-        css_conn_cleanup(c);
+        if (!respond_blocking(c, RESP_FAIL))
+            css_conn_cleanup(c);
         return;
     }
     log_debug("REPLACE[old daemon]: Accepted takeover phase 2 (challenge data req) from PID %li", (long)take_pid);
@@ -743,8 +743,8 @@ static void handle_req_take(css_conn_t* c, css_t* css)
     const pid_t take_pid = (pid_t)c->rbuf.d;
     if (!css->replacement_pid || take_pid != css->replacement_pid || c != css->replace_conn_dmn) {
         log_illegal_takeover('3', (long)take_pid, (long)css->replacement_pid);
-        respond(c, RESP_FAIL, 0, 0, NULL, false);
-        css_conn_cleanup(c);
+        if (!respond_blocking(c, RESP_FAIL))
+            css_conn_cleanup(c);
         return;
     }
     gdnsd_assert(css->handoff_fds_count >= 2LU);
