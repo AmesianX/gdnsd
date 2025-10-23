@@ -1,6 +1,7 @@
 3.9.x - Unreleased (yet)
     * Bumped libsodium min requirement to 1.0.12 and removed the kdf_compat
       code we used to support older versions.
+    * testsuite: fix breakage from upstream Net::DNS 1.49 and 1.53
 
 3.8.3 - 2024-09-19
     * Fixed testsuite compat with Net::DNS 1.46
