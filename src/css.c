@@ -966,11 +966,9 @@ static void socks_import_fd(const socks_cfg_t* socks_cfg, const int fd)
     memset(&fd_sin, 0, sizeof(fd_sin));
     fd_sin.len = GDNSD_ANYSIN_MAXLEN;
 
-    if (getsockname(fd, &fd_sin.sa, &fd_sin.len) || fd_sin.len > GDNSD_ANYSIN_MAXLEN) {
+    if (getsockname(fd, &fd_sin.sa, &fd_sin.len)) {
         if (errno == EBADF)
             log_err("REPLACE[new daemon]: Socket handoff: Ignoring invalid file descriptor %i", fd);
-        else if (fd_sin.len > GDNSD_ANYSIN_MAXLEN)
-            log_err("REPLACE[new daemon]: Socket handoff: getsockname(%i) returned oversize address, closing", fd);
         else
             log_err("REPLACE[new daemon]: Socket handoff: getsockname(%i) failed, closing: %s", fd, logf_errno());
         if (errno != EBADF)
@@ -978,17 +976,27 @@ static void socks_import_fd(const socks_cfg_t* socks_cfg, const int fd)
         return;
     }
 
-    int fd_sin_type = 0;
-    socklen_t fd_sin_type_size = sizeof(fd_sin_type);
-    if (getsockopt(fd, SOL_SOCKET, SO_TYPE, &fd_sin_type, &fd_sin_type_size)
-            || fd_sin_type_size != sizeof(fd_sin_type)
-            || (fd_sin_type != SOCK_DGRAM && fd_sin_type != SOCK_STREAM)) {
-        log_err("REPLACE[new daemon]: Socket handoff: cannot get type of fd %i @ %s, closing: %s", fd, logf_anysin(&fd_sin), logf_errno());
+    if (fd_sin.len > GDNSD_ANYSIN_MAXLEN) {
+        log_err("REPLACE[new daemon]: Socket handoff: getsockname(%i) returned oversize address, closing", fd);
         close(fd);
         return;
     }
-    const bool fd_sin_is_udp = (fd_sin_type == SOCK_DGRAM);
 
+    int fd_sin_type = 0;
+    socklen_t fd_sin_type_size = sizeof(fd_sin_type);
+    if (getsockopt(fd, SOL_SOCKET, SO_TYPE, &fd_sin_type, &fd_sin_type_size)) {
+        log_err("REPLACE[new daemon]: Socket handoff: cannot get SO_TYPE for fd %i @ %s, closing: %s", fd, logf_anysin(&fd_sin), logf_errno());
+        close(fd);
+        return;
+    }
+
+    if (fd_sin_type_size != sizeof(fd_sin_type) || (fd_sin_type != SOCK_DGRAM && fd_sin_type != SOCK_STREAM)) {
+        log_err("REPLACE[new daemon]: Socket handoff: invalid SO_TYPE for fd %i @ %s, closing", fd, logf_anysin(&fd_sin));
+        close(fd);
+        return;
+    }
+
+    const bool fd_sin_is_udp = (fd_sin_type == SOCK_DGRAM);
     for (unsigned i = 0; i < socks_cfg->num_dns_threads; i++) {
         dns_thread_t* dt = &socks_cfg->dns_threads[i];
         if (dt->sock == -1 && dt->is_udp == fd_sin_is_udp
