@@ -36,7 +36,10 @@
 #include <netdb.h>
 #include <arpa/inet.h>
 
-static const char proxy_v2sig[12] = "\x0D\x0A\x0D\x0A\x00\x0D\x0A\x51\x55\x49\x54\x0A";
+// The 13 here is wrong, but it silences a nonstring warning on newer GCC
+// without having to support the attribute for now.  The code that uses this
+// uses the real length of 12.
+static const char proxy_v2sig[13] = "\x0D\x0A\x0D\x0A\x00\x0D\x0A\x51\x55\x49\x54\x0A";
 
 F_NONNULL
 static size_t parse_proxy_v1(char* v1, const size_t dlen, gdnsd_anysin_t* sa)
