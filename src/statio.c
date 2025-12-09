@@ -235,8 +235,8 @@ char* statio_serialize(size_t* dlen_p)
 // then adding a new one.
 void statio_deserialize(const uint64_t* data, size_t dlen)
 {
-    if (!dlen || dlen & 4U) {
-        log_err("stats deserialization failed: length must be a non-zero multiple of 8");
+    if (!dlen || dlen & 7U || dlen > 65535) {
+        log_err("stats deserialization failed: length must be a small-ish non-zero multiple of 8");
     } else {
         size_t input_slot_count = (dlen >> 3) - 1U;
         start_time = (time_t)data[input_slot_count];
